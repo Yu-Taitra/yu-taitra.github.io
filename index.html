@@ -538,9 +538,29 @@ function startTournament() {
   doNextRound();
 }
 
+// ── Round 1: fixed manual pairings ───────────────────
+function makeRound1Pairings() {
+  // Fixed order: [ [p1name, p2name], ... ]
+  const fixed = [
+    ['黃心佑', 'Pace'],
+    ['楊棋',   '杰'],
+    ['林國軒', '樂'],
+    ['陳仕益', '羅羅'],
+    ['Cui',    '帽子'],
+    ['小宇',   '湯姆'],
+    ['雪球',   'やりま'],
+    ['小恩',   '宗倫'],
+  ];
+  return fixed.map(([n1, n2]) => ({
+    p1: players.indexOf(n1),
+    p2: players.indexOf(n2),
+    result: null
+  }));
+}
+
 function doNextRound() {
   if (currentRound >= TOTAL_ROUNDS) return;
-  rounds.push(makePairings());
+  rounds.push(currentRound === 0 ? makeRound1Pairings() : makePairings());
   renderRound(currentRound);
   renderStandings(false);
   currentRound++;
