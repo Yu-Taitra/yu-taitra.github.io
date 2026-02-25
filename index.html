@@ -271,7 +271,7 @@
     <div class="timeup-sub">25 分鐘對局時間結束</div>
     <div class="timeup-note">
       請各桌完成目前進行中的遊戲，<br>
-      並依當下盤面決定勝負後輸入結果。
+      並依剩餘獎賞卡數量決定勝負後輸入結果。
     </div>
     <button class="btn btn-secondary" style="margin:0" onclick="dismissTimeup()">確認知悉</button>
   </div>
@@ -280,8 +280,8 @@
 <div class="container">
   <header>
     <div class="title-label">Play! Pokémon Official Rules</div>
-    <h1>瑞士制<br><span>配對系統</span></h1>
-    <p class="subtitle">16人 · 三輪制 · PTCG 官方規則</p>
+    <h1>牌鬼盃<br><span>第一屆</span></h1>
+    <p class="subtitle">賽事專用系統 · 16人 · 三輪瑞士制 · PTCG 官方規則</p>
     <div class="divider"></div>
   </header>
 
@@ -755,5 +755,26 @@ function showFinal() {
   container.scrollIntoView({ behavior: 'smooth' });
 }
 </script>
+<footer style="
+  text-align: center;
+  padding: 40px 24px 48px;
+  position: relative; z-index: 1;
+  border-top: 1px solid #2a2a35;
+  margin-top: 40px;
+">
+  <div style="font-family:'Bebas Neue',sans-serif; font-size:11px; letter-spacing:5px; color:#7a7880; margin-bottom:10px;">
+    CREDIT
+  </div>
+  <div style="font-size:15px; color:#7a7880; margin-bottom:6px;">
+    Created By <a href="https://www.instagram.com/yu__03.07" target="_blank"
+      style="color:#c9a84c; text-decoration:none; border-bottom:1px solid rgba(201,168,76,0.4); padding-bottom:1px; transition:color 0.2s;"
+      onmouseover="this.style.color='#e8c97a'" onmouseout="this.style.color='#c9a84c'">
+      小宇（@yu__03.07）
+    </a>
+  </div>
+  <div style="font-size:13px; color:#4a5568; letter-spacing:1px;">
+    Powered By Claude Sonnet 4.6
+  </div>
+</footer>
 </body>
 </html>
