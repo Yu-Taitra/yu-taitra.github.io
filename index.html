@@ -487,8 +487,30 @@ function prevOpps(pid) {
 }
 function hasBye(pid) { return rounds.some(r => r.some(m => m.bye === pid)); }
 
+// Fisher-Yates shuffle
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
 function makePairings() {
-  const sorted = sortedIds();
+  // Group players by score, shuffle within each group, then concatenate
+  const ids = Array.from({length: players.length}, (_, i) => i);
+  const scoreMap = {};
+  ids.forEach(pid => {
+    const pts = getRecord(pid).pts;
+    if (!scoreMap[pts]) scoreMap[pts] = [];
+    scoreMap[pts].push(pid);
+  });
+  // Sort groups by score desc, shuffle within each group
+  const sorted = Object.keys(scoreMap)
+    .map(Number)
+    .sort((a, b) => b - a)
+    .flatMap(pts => shuffle(scoreMap[pts]));
+
   const paired = new Set();
   const matches = [];
 
