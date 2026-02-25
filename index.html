@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PTCG 瑞士制配對系統</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Crimson+Pro:ital,wght@0,400;0,600;1,400&display=swap');
+
+  :root {
+    --bg: #0d0d0f;
+    --surface: #141418;
+    --surface2: #1c1c22;
+    --border: #2a2a35;
+    --gold: #c9a84c;
+    --gold-light: #e8c97a;
+    --text: #e8e4dc;
+    --muted: #7a7880;
+    --win: #2ecc71;
+    --loss: #e74c3c;
+    --draw: #f39c12;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Crimson Pro', Georgia, serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background:
+      repeating-linear-gradient(0deg, transparent, transparent 40px, rgba(201,168,76,0.02) 40px, rgba(201,168,76,0.02) 41px),
+      repeating-linear-gradient(90deg, transparent, transparent 40px, rgba(201,168,76,0.02) 40px, rgba(201,168,76,0.02) 41px);
+    pointer-events: none; z-index: 0;
+  }
+
+  /* ── Timer bar (sticky) ─────────────────────────────── */
+  #timer-bar {
+    display: none;
+    position: sticky; top: 0; z-index: 100;
+    background: var(--surface);
+    border-bottom: 2px solid var(--border);
+    align-items: center;
+    gap: 20px;
+    padding: 10px 28px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+  }
+  #timer-bar.active { display: flex; }
+
+  .timer-label {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 12px; letter-spacing: 4px; color: var(--muted);
+    white-space: nowrap;
+  }
+
+  #timer-display {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 40px; letter-spacing: 4px;
+    color: var(--gold-light);
+    min-width: 108px; text-align: center;
+    transition: color 0.4s;
+  }
+  #timer-display.warning { color: var(--draw); }
+  #timer-display.urgent  { color: var(--loss); animation: pulse 0.8s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.35} }
+
+  .timer-track {
+    flex: 1; height: 5px; background: var(--border);
+    border-radius: 3px; overflow: hidden; max-width: 280px;
+  }
+  #timer-fill {
+    height: 100%; width: 100%;
+    background: var(--gold); border-radius: 3px;
+    transition: width 1s linear, background 0.5s;
+  }
+  #timer-fill.warning { background: var(--draw); }
+  #timer-fill.urgent  { background: var(--loss); }
+
+  .timer-btns { display: flex; gap: 8px; margin-left: auto; }
+  .tbtn {
+    font-family: 'Bebas Neue', sans-serif; font-size: 12px;
+    letter-spacing: 2px; padding: 6px 14px;
+    border: 1px solid var(--border); cursor: pointer;
+    background: var(--surface2); color: var(--muted); transition: all 0.15s;
+  }
+  .tbtn:hover { border-color: var(--gold); color: var(--gold); }
+  .tbtn.running { background: var(--gold); border-color: var(--gold); color: var(--bg); }
+
+  /* Time-up overlay */
+  #timeup-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.78); z-index: 300;
+    align-items: center; justify-content: center;
+  }
+  #timeup-overlay.show { display: flex; }
+  .timeup-box {
+    background: #180808; border: 2px solid var(--loss);
+    padding: 48px 56px; text-align: center; max-width: 420px;
+  }
+  .timeup-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 56px; letter-spacing: 4px; color: var(--loss); margin-bottom: 8px;
+  }
+  .timeup-sub { font-style: italic; color: var(--muted); font-size: 17px; margin-bottom: 20px; }
+  .timeup-note { font-size: 14px; color: var(--muted); line-height: 1.7; margin-bottom: 24px; }
+
+  /* ── Layout ─────────────────────────────────────────── */
+  .container { max-width: 980px; margin: 0 auto; padding: 40px 24px; position: relative; z-index: 1; }
+
+  header { text-align: center; margin-bottom: 48px; }
+  .title-label { font-family: 'Bebas Neue', sans-serif; font-size: 11px; letter-spacing: 6px; color: var(--gold); margin-bottom: 8px; }
+  h1 { font-family: 'Bebas Neue', sans-serif; font-size: clamp(52px, 9vw, 88px); line-height: 0.9; letter-spacing: 4px; }
+  h1 span { color: var(--gold); }
+  .subtitle { font-style: italic; color: var(--muted); font-size: 17px; margin-top: 12px; }
+  .divider { width: 80px; height: 2px; background: linear-gradient(90deg, transparent, var(--gold), transparent); margin: 24px auto; }
+
+  .rules-note { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-bottom: 32px; }
+  .rule-pill { background: var(--surface2); border: 1px solid var(--border); padding: 6px 16px; font-size: 13px; color: var(--muted); }
+  .rule-pill strong { color: var(--gold-light); }
+
+  .setup-panel { background: var(--surface); border: 1px solid var(--border); border-top: 3px solid var(--gold); padding: 32px; margin-bottom: 32px; }
+  .setup-title { font-family: 'Bebas Neue', sans-serif; font-size: 22px; letter-spacing: 3px; color: var(--gold); margin-bottom: 24px; }
+  .players-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(175px, 1fr)); gap: 10px; margin-bottom: 24px; }
+  .player-input { background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 10px 14px; font-family: 'Crimson Pro', serif; font-size: 16px; width: 100%; transition: border-color 0.2s; outline: none; }
+  .player-input:focus { border-color: var(--gold); }
+  .player-input::placeholder { color: var(--muted); font-style: italic; }
+
+  .btn { font-family: 'Bebas Neue', sans-serif; font-size: 17px; letter-spacing: 3px; padding: 13px 32px; border: none; cursor: pointer; transition: all 0.2s; }
+  .btn-primary { background: var(--gold); color: var(--bg); }
+  .btn-primary:hover { background: var(--gold-light); transform: translateY(-1px); }
+  .btn-secondary { background: transparent; color: var(--gold); border: 1px solid var(--gold); margin-left: 12px; }
+  .btn-secondary:hover { background: rgba(201,168,76,0.1); }
+  .btn-small { font-size: 13px; padding: 8px 20px; letter-spacing: 2px; }
+
+  .tournament { display: none; }
+
+  .round-section { margin-bottom: 40px; animation: slideIn 0.4s ease; }
+  @keyframes slideIn { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }
+
+  .round-header { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; }
+  .round-badge { font-family: 'Bebas Neue', sans-serif; font-size: 13px; letter-spacing: 4px; background: var(--gold); color: var(--bg); padding: 4px 16px; flex-shrink: 0; }
+  .round-line { flex: 1; height: 1px; background: var(--border); }
+
+  .matches-list { display: flex; flex-direction: column; gap: 6px; }
+
+  /* Match card: table# | p1 | VS | p2 | result */
+  .match-card {
+    background: var(--surface); border: 1px solid var(--border);
+    display: grid;
+    grid-template-columns: 44px 1fr 56px 1fr auto;
+    align-items: center;
+  }
+  .match-table {
+    font-family: 'Bebas Neue', sans-serif; font-size: 18px; color: var(--muted);
+    text-align: center; padding: 0 4px; border-right: 1px solid var(--border);
+    align-self: stretch; display: flex; align-items: center; justify-content: center;
+  }
+  .match-player { padding: 14px 18px; font-size: 18px; font-weight: 600; }
+  .match-player-1 { text-align: right; }
+  .match-player-2 { text-align: left; }
+  .match-vs {
+    padding: 14px 8px; font-family: 'Bebas Neue', sans-serif; font-size: 18px; color: var(--muted);
+    text-align: center; border-left: 1px solid var(--border); border-right: 1px solid var(--border);
+    align-self: stretch; display: flex; align-items: center; justify-content: center;
+  }
+  .result-area { display: flex; gap: 8px; padding: 10px 16px; align-items: center; }
+
+  .rbtn {
+    font-family: 'Bebas Neue', sans-serif; font-size: 11px; letter-spacing: 1px;
+    padding: 6px 12px; border: 1px solid var(--border); cursor: pointer;
+    background: var(--surface2); color: var(--muted); transition: all 0.15s; white-space: nowrap;
+  }
+  .rbtn:hover { border-color: var(--gold); color: var(--gold); }
+  .rbtn.active-win { background: var(--win); border-color: var(--win); color: #000; font-size: 12px; }
+
+  .match-player-1[data-result="win"] { color: var(--win); }
+  .match-player-1[data-result="loss"] { color: var(--muted); opacity: 0.45; }
+  .match-player-2[data-result="win"] { color: var(--win); }
+  .match-player-2[data-result="loss"] { color: var(--muted); opacity: 0.45; }
+
+  .match-card.bye { grid-template-columns: 44px 1fr; border-style: dashed; opacity: 0.65; }
+  .bye-text { padding: 12px 18px; font-style: italic; color: var(--muted); font-size: 15px; }
+
+  .round-controls { margin-top: 18px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .progress-text { font-style: italic; color: var(--muted); font-size: 15px; }
+
+  /* Standings */
+  .standings-section { margin-bottom: 40px; }
+  .standings-title { font-family: 'Bebas Neue', sans-serif; font-size: 26px; letter-spacing: 4px; margin-bottom: 4px; }
+  .standings-subtitle { font-style: italic; color: var(--muted); font-size: 13px; margin-bottom: 18px; }
+
+  table { width: 100%; border-collapse: collapse; }
+  thead tr { border-bottom: 2px solid var(--gold); }
+  th { font-family: 'Bebas Neue', sans-serif; font-size: 12px; letter-spacing: 3px; color: var(--gold); text-align: center; padding: 10px 12px; font-weight: normal; }
+  th:nth-child(2) { text-align: left; }
+  tbody tr { border-bottom: 1px solid var(--border); transition: background 0.15s; }
+  tbody tr:hover { background: var(--surface2); }
+  td { padding: 11px 12px; font-size: 16px; text-align: center; }
+  td:nth-child(2) { text-align: left; }
+
+  .rank-num { font-family: 'Bebas Neue', sans-serif; font-size: 20px; color: var(--muted); }
+  .rank-1 .rank-num { color: #ffd700; }
+  .rank-2 .rank-num { color: #c0c0c0; }
+  .rank-3 .rank-num { color: #cd7f32; }
+  .player-name-cell { font-weight: 600; font-size: 17px; }
+  .score-cell { font-family: 'Bebas Neue', sans-serif; font-size: 22px; color: var(--gold-light); }
+  .wl { font-size: 14px; }
+  .wl .w { color: var(--win); }
+  .wl .l { color: var(--loss); }
+  .pct { font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .pct-high { color: var(--win) !important; }
+  .pct-low  { color: var(--loss) !important; }
+
+  .champion-banner {
+    background: linear-gradient(135deg, #1a160a, #2a1f05);
+    border: 1px solid var(--gold); padding: 40px; text-align: center; margin-bottom: 32px;
+    position: relative; overflow: hidden;
+  }
+  .champion-banner::before {
+    content: '★'; position: absolute; font-size: 200px;
+    color: rgba(201,168,76,0.04); top: 50%; left: 50%;
+    transform: translate(-50%,-50%); pointer-events: none;
+  }
+  .champion-label { font-family: 'Bebas Neue', sans-serif; font-size: 13px; letter-spacing: 6px; color: var(--gold); margin-bottom: 8px; }
+  .champion-name  { font-family: 'Bebas Neue', sans-serif; font-size: 56px; letter-spacing: 4px; color: var(--gold-light); }
+  .champion-score { font-size: 19px; font-style: italic; color: var(--muted); margin-top: 8px; }
+
+  @media (max-width: 640px) {
+    .match-card { grid-template-columns: 36px 1fr 44px 1fr; }
+    .result-area { grid-column: 1/-1; justify-content: center; border-top: 1px solid var(--border); }
+    #timer-bar { flex-wrap: wrap; }
+    .timer-track { max-width: 100%; flex: 0 0 100%; order: 10; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ── Sticky timer bar ── -->
+<div id="timer-bar">
+  <div class="timer-label">對局時間</div>
+  <div id="timer-display">25:00</div>
+  <div class="timer-track"><div id="timer-fill"></div></div>
+  <div class="timer-btns">
+    <button class="tbtn" id="tbtn-toggle" onclick="timerToggle()">開始</button>
+    <button class="tbtn" onclick="timerReset()">重置</button>
+  </div>
+</div>
+
+<!-- ── Time-up overlay ── -->
+<div id="timeup-overlay">
+  <div class="timeup-box">
+    <div class="timeup-title">⏰ 時間到！</div>
+    <div class="timeup-sub">25 分鐘對局時間結束</div>
+    <div class="timeup-note">
+      請各桌完成目前進行中的遊戲，<br>
+      並依當下盤面決定勝負後輸入結果。
+    </div>
+    <button class="btn btn-secondary" style="margin:0" onclick="dismissTimeup()">確認知悉</button>
+  </div>
+</div>
+
+<div class="container">
+  <header>
+    <div class="title-label">Play! Pokémon Official Rules</div>
+    <h1>瑞士制<br><span>配對系統</span></h1>
+    <p class="subtitle">16人 · 三輪制 · PTCG 官方規則</p>
+    <div class="divider"></div>
+  </header>
+
+  <div class="rules-note">
+    <div class="rule-pill">勝 <strong>+3分</strong></div>
+    <div class="rule-pill">敗 <strong>+0分</strong></div>
+    <div class="rule-pill">輪空 <strong>+3分（不計入勝率）</strong></div>
+    <div class="rule-pill">同分排名：<strong>Op Win% → Op-Op Win%</strong></div>
+    <div class="rule-pill">勝率限制：<strong>25%–75%</strong></div>
+    <div class="rule-pill">⏱ 每輪 <strong>25 分鐘</strong></div>
+  </div>
+
+  <div id="setup-panel" class="setup-panel">
+    <div class="setup-title">▸ 輸入參賽者名單</div>
+    <div class="players-grid" id="players-grid"></div>
+    <button class="btn btn-primary" onclick="startTournament()">開始比賽</button>
+    <button class="btn btn-secondary" onclick="fillSample()">填入範例名稱</button>
+  </div>
+
+  <div id="tournament" class="tournament">
+    <div id="rounds-container"></div>
+    <div id="standings-container"></div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+// PTCG Official Swiss Rules (no draws):
+//   Win = 3 pts, Loss = 0 pts  (no ties in PTCG — game plays to completion)
+//   Bye = Win (3 pts) excluded from Win% calc
+//   Tiebreakers: Match Points → Op Win% → Op-Op Win%
+//   Win% capped: 25%–75%
+//   Timer: 25 minutes per round
+// ═══════════════════════════════════════════════════════
+
+const TOTAL_PLAYERS = 16;
+const TOTAL_ROUNDS  = 3;
+const PTS_WIN = 3, PTS_LOSS = 0;
+const WIN_FLOOR = 0.25, WIN_CAP = 0.75;
+const ROUND_SECONDS = 25 * 60; // 25 minutes
+
+let players = [];
+let rounds  = [];
+let currentRound = 0;
+
+// ── Timer state ───────────────────────────────────────
+let timerSecsLeft = ROUND_SECONDS;
+let timerRunning  = false;
+let timerInterval = null;
+
+function timerTick() {
+  if (!timerRunning) return;
+  timerSecsLeft--;
+  updateTimerUI();
+  if (timerSecsLeft <= 0) {
+    timerRunning = false;
+    clearInterval(timerInterval);
+    timerInterval = null;
+    document.getElementById('tbtn-toggle').textContent = '開始';
+    document.getElementById('tbtn-toggle').classList.remove('running');
+    document.getElementById('timeup-overlay').classList.add('show');
+  }
+}
+
+function timerToggle() {
+  if (timerSecsLeft <= 0) return;
+  timerRunning = !timerRunning;
+  const btn = document.getElementById('tbtn-toggle');
+  if (timerRunning) {
+    btn.textContent = '暫停';
+    btn.classList.add('running');
+    timerInterval = setInterval(timerTick, 1000);
+  } else {
+    btn.textContent = '繼續';
+    btn.classList.remove('running');
+    clearInterval(timerInterval);
+    timerInterval = null;
+  }
+}
+
+function timerReset() {
+  timerRunning = false;
+  clearInterval(timerInterval);
+  timerInterval = null;
+  timerSecsLeft = ROUND_SECONDS;
+  const btn = document.getElementById('tbtn-toggle');
+  btn.textContent = '開始';
+  btn.classList.remove('running');
+  document.getElementById('timeup-overlay').classList.remove('show');
+  updateTimerUI();
+}
+
+function updateTimerUI() {
+  const m = Math.floor(timerSecsLeft / 60);
+  const s = timerSecsLeft % 60;
+  const display = document.getElementById('timer-display');
+  const fill    = document.getElementById('timer-fill');
+  display.textContent = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  const pct = timerSecsLeft / ROUND_SECONDS;
+  fill.style.width = (pct * 100) + '%';
+  // State classes
+  const urgent  = timerSecsLeft <= 60;
+  const warning = timerSecsLeft <= 5 * 60 && !urgent;
+  display.className = urgent ? 'urgent' : warning ? 'warning' : '';
+  fill.className    = urgent ? 'urgent' : warning ? 'warning' : '';
+}
+
+function dismissTimeup() {
+  document.getElementById('timeup-overlay').classList.remove('show');
+}
+
+// ── Build player inputs ───────────────────────────────
+const grid = document.getElementById('players-grid');
+for (let i = 0; i < TOTAL_PLAYERS; i++) {
+  const inp = document.createElement('input');
+  inp.type = 'text'; inp.className = 'player-input';
+  inp.placeholder = `選手 ${i + 1}`; inp.id = `pi-${i}`;
+  grid.appendChild(inp);
+}
+
+function fillSample() {
+  ['宗倫','雪球','楊棋','樂','杰','やりま','湯姆','小恩',
+   '小宇','Cui','林國軒','帽子','陳仕益','黃心佑','羅羅','Pace']
+  .forEach((n, i) => { document.getElementById(`pi-${i}`).value = n; });
+}
+
+function N(pid) { return players[pid]; }
+
+// ── Scoring ───────────────────────────────────────────
+function getRecord(pid) {
+  let pts = 0, wins = 0, losses = 0, nonByeRounds = 0, hasBye = false;
+  for (const round of rounds) {
+    for (const m of round) {
+      if (m.bye === pid) { pts += PTS_WIN; wins++; hasBye = true; continue; }
+      if (m.p1 !== pid && m.p2 !== pid) continue;
+      if (!m.result) continue;
+      nonByeRounds++;
+      const isP1 = m.p1 === pid;
+      if (m.result === '1') { isP1 ? (pts += PTS_WIN, wins++) : losses++; }
+      else                   { isP1 ? losses++ : (pts += PTS_WIN, wins++); }
+    }
+  }
+  return { pts, wins, losses, nonByeRounds, hasBye };
+}
+
+// Own win% (non-bye rounds only), capped 25–75%
+function winPct(pid) {
+  const r = getRecord(pid);
+  if (r.nonByeRounds === 0) return WIN_FLOOR;
+  const byePts    = r.hasBye ? PTS_WIN : 0;
+  const nonByePts = r.pts - byePts;
+  const raw = nonByePts / (r.nonByeRounds * PTS_WIN);
+  return Math.min(WIN_CAP, Math.max(WIN_FLOOR, raw));
+}
+
+// Opponents from completed non-bye matches
+function opponents(pid) {
+  const list = [];
+  for (const round of rounds) {
+    for (const m of round) {
+      if (m.bye !== undefined) continue;
+      if (!m.result) continue;
+      if (m.p1 === pid) list.push(m.p2);
+      else if (m.p2 === pid) list.push(m.p1);
+    }
+  }
+  return list;
+}
+
+function opWinPct(pid) {
+  const opps = opponents(pid);
+  if (!opps.length) return WIN_FLOOR;
+  return opps.reduce((s, o) => s + winPct(o), 0) / opps.length;
+}
+function opOpWinPct(pid) {
+  const opps = opponents(pid);
+  if (!opps.length) return WIN_FLOOR;
+  return opps.reduce((s, o) => s + opWinPct(o), 0) / opps.length;
+}
+
+function cmpRank(a, b) {
+  const ra = getRecord(a), rb = getRecord(b);
+  if (rb.pts !== ra.pts) return rb.pts - ra.pts;
+  const oa = opWinPct(a), ob = opWinPct(b);
+  if (Math.abs(ob - oa) > 1e-9) return ob - oa;
+  return opOpWinPct(b) - opOpWinPct(a);
+}
+function sortedIds() {
+  return Array.from({length: players.length}, (_, i) => i).sort(cmpRank);
+}
+
+// ── Pairing ───────────────────────────────────────────
+function prevOpps(pid) {
+  const s = new Set();
+  for (const round of rounds) {
+    for (const m of round) {
+      if (m.bye !== undefined) continue;
+      if (m.p1 === pid) s.add(m.p2);
+      else if (m.p2 === pid) s.add(m.p1);
+    }
+  }
+  return s;
+}
+function hasBye(pid) { return rounds.some(r => r.some(m => m.bye === pid)); }
+
+function makePairings() {
+  const sorted = sortedIds();
+  const paired = new Set();
+  const matches = [];
+
+  // Bye: lowest-ranked player without a prior bye
+  if (players.length % 2 === 1) {
+    let byePid = null;
+    for (let i = sorted.length - 1; i >= 0; i--) {
+      if (!hasBye(sorted[i])) { byePid = sorted[i]; break; }
+    }
+    if (byePid === null) byePid = sorted[sorted.length - 1];
+    paired.add(byePid);
+    matches.push({ bye: byePid });
+  }
+
+  for (let i = 0; i < sorted.length; i++) {
+    const p1 = sorted[i];
+    if (paired.has(p1)) continue;
+    paired.add(p1);
+    const seen = prevOpps(p1);
+    let p2 = null;
+    // Prefer non-rematch within similar bracket
+    for (let j = i + 1; j < sorted.length; j++) {
+      if (!paired.has(sorted[j]) && !seen.has(sorted[j])) { p2 = sorted[j]; break; }
+    }
+    // Fallback: allow rematch (unavoidable in small fields)
+    if (p2 === null) {
+      for (let j = i + 1; j < sorted.length; j++) {
+        if (!paired.has(sorted[j])) { p2 = sorted[j]; break; }
+      }
+    }
+    if (p2 !== null) { paired.add(p2); matches.push({ p1, p2, result: null }); }
+  }
+  return matches;
+}
+
+// ── Tournament flow ───────────────────────────────────
+function startTournament() {
+  players = [];
+  for (let i = 0; i < TOTAL_PLAYERS; i++) {
+    const v = document.getElementById(`pi-${i}`).value.trim();
+    players.push(v || `選手${i + 1}`);
+  }
+  document.getElementById('setup-panel').style.display = 'none';
+  document.getElementById('tournament').style.display = 'block';
+  document.getElementById('timer-bar').classList.add('active');
+  currentRound = 0; rounds = [];
+  doNextRound();
+}
+
+function doNextRound() {
+  if (currentRound >= TOTAL_ROUNDS) return;
+  rounds.push(makePairings());
+  renderRound(currentRound);
+  renderStandings(false);
+  currentRound++;
+  // Reset & auto-start timer for new round
+  timerReset();
+}
+
+// ── Render round ─────────────────────────────────────
+function renderRound(ri) {
+  const container = document.getElementById('rounds-container');
+  const sec = document.createElement('div');
+  sec.className = 'round-section';
+  const round = rounds[ri];
+  const isLast = ri === TOTAL_ROUNDS - 1;
+  let tableNum = 1;
+
+  const matchesHTML = round.map((m, mi) => {
+    if (m.bye !== undefined) {
+      return `<div class="match-card bye">
+        <div class="match-table">BYE</div>
+        <div class="bye-text">🎯 ${N(m.bye)}（輪空 — 得 3 分，不計入勝率）</div>
+      </div>`;
+    }
+    const t = tableNum++;
+    return `<div class="match-card" id="mc-${ri}-${mi}">
+      <div class="match-table">${t}</div>
+      <div class="match-player match-player-1" id="mp1-${ri}-${mi}">${N(m.p1)}</div>
+      <div class="match-vs">VS</div>
+      <div class="match-player match-player-2" id="mp2-${ri}-${mi}">${N(m.p2)}</div>
+      <div class="result-area">
+        <button class="rbtn" id="rb1-${ri}-${mi}" onclick="setResult(${ri},${mi},'1')">◀ ${N(m.p1)} 勝</button>
+        <button class="rbtn" id="rb2-${ri}-${mi}" onclick="setResult(${ri},${mi},'2')">${N(m.p2)} 勝 ▶</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  const nextAction = isLast ? 'showFinal()' : 'doNextRound()';
+  const nextLabel  = isLast ? '查看最終排名' : '進入下一輪 →';
+
+  sec.innerHTML = `
+    <div class="round-header">
+      <div class="round-badge">第 ${ri + 1} 輪</div>
+      <div class="round-line"></div>
+    </div>
+    <div class="matches-list">${matchesHTML}</div>
+    <div class="round-controls">
+      <span class="progress-text" id="prog-${ri}">請輸入所有對局結果</span>
+      <button class="btn btn-primary btn-small" id="nextbtn-${ri}"
+              style="display:none" onclick="${nextAction}">${nextLabel}</button>
+    </div>
+  `;
+  container.appendChild(sec);
+  sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function setResult(ri, mi, winner) {
+  rounds[ri][mi].result = winner;
+
+  const p1el = document.getElementById(`mp1-${ri}-${mi}`);
+  const p2el = document.getElementById(`mp2-${ri}-${mi}`);
+  const b1   = document.getElementById(`rb1-${ri}-${mi}`);
+  const b2   = document.getElementById(`rb2-${ri}-${mi}`);
+
+  b1.classList.remove('active-win');
+  b2.classList.remove('active-win');
+
+  if (winner === '1') {
+    b1.classList.add('active-win');
+    p1el.setAttribute('data-result','win');
+    p2el.setAttribute('data-result','loss');
+  } else {
+    b2.classList.add('active-win');
+    p1el.setAttribute('data-result','loss');
+    p2el.setAttribute('data-result','win');
+  }
+
+  checkDone(ri);
+  renderStandings(false);
+}
+
+function checkDone(ri) {
+  const round = rounds[ri];
+  const done  = round.filter(m => m.bye !== undefined || !!m.result).length;
+  const prog  = document.getElementById(`prog-${ri}`);
+  const btn   = document.getElementById(`nextbtn-${ri}`);
+  if (done === round.length) {
+    prog.textContent = '✓ 本輪全部完成';
+    prog.style.color = 'var(--win)';
+    if (btn) btn.style.display = 'inline-block';
+    // Stop timer when round is done
+    if (timerRunning) timerToggle();
+  } else {
+    prog.textContent = `${done} / ${round.length} 場已完成`;
+    prog.style.color = '';
+  }
+}
+
+// ── Standings ─────────────────────────────────────────
+function pctClass(v) { return v >= 0.60 ? 'pct pct-high' : v < 0.35 ? 'pct pct-low' : 'pct'; }
+
+function renderStandings(isFinal) {
+  const container = document.getElementById('standings-container');
+  container.innerHTML = '';
+  const ids = sortedIds();
+  const sec = document.createElement('div');
+  sec.className = 'standings-section';
+
+  const title = isFinal ? '最終排名' : '當前排名';
+  const sub   = isFinal
+    ? '三輪結束 · Match Points → Op Win% → Op-Op Win%'
+    : `第 ${rounds.length} 輪 / 共 ${TOTAL_ROUNDS} 輪 · PTCG 官方規則`;
+
+  const rows = ids.map((pid, idx) => {
+    const rec = getRecord(pid);
+    const ow  = opWinPct(pid);
+    const oow = opOpWinPct(pid);
+    const medal   = ['🥇','🥈','🥉'][idx] || '';
+    const rkCls   = ['rank-1','rank-2','rank-3'][idx] || '';
+    const byeTag  = rec.hasBye ? ' <span style="font-size:11px;color:var(--muted)">[BYE]</span>' : '';
+    return `<tr class="${rkCls}">
+      <td class="rank-num">${medal || idx + 1}</td>
+      <td class="player-name-cell">${N(pid)}${byeTag}</td>
+      <td class="score-cell">${rec.pts}</td>
+      <td class="wl"><span class="w">${rec.wins}勝</span> <span class="l">${rec.losses}負</span></td>
+      <td class="${pctClass(ow)}">${(ow*100).toFixed(1)}%</td>
+      <td class="${pctClass(oow)}">${(oow*100).toFixed(1)}%</td>
+    </tr>`;
+  }).join('');
+
+  sec.innerHTML = `
+    <div class="standings-title">${title}</div>
+    <div class="standings-subtitle">${sub}</div>
+    <table>
+      <thead><tr>
+        <th>名次</th><th>選手</th><th>積分</th><th>勝/負</th>
+        <th>Op Win%</th><th>Op-Op Win%</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    ${isFinal ? `<div style="margin-top:24px;text-align:center;">
+      <button class="btn btn-secondary" onclick="location.reload()">重新開始</button>
+    </div>` : ''}
+  `;
+  container.appendChild(sec);
+}
+
+function showFinal() {
+  document.getElementById(`nextbtn-${TOTAL_ROUNDS - 1}`).style.display = 'none';
+  if (timerRunning) timerToggle();
+
+  const ids   = sortedIds();
+  const champ = ids[0];
+  const rec   = getRecord(champ);
+  const ow    = opWinPct(champ);
+
+  const container = document.getElementById('standings-container');
+  container.innerHTML = '';
+
+  const banner = document.createElement('div');
+  banner.className = 'champion-banner';
+  banner.innerHTML = `
+    <div class="champion-label">🏆 Tournament Champion</div>
+    <div class="champion-name">${N(champ)}</div>
+    <div class="champion-score">
+      ${rec.pts} 積分 · ${rec.wins}勝 ${rec.losses}負 · Op Win% ${(ow*100).toFixed(1)}%
+    </div>
+  `;
+  container.appendChild(banner);
+  renderStandings(true);
+  container.scrollIntoView({ behavior: 'smooth' });
+}
+</script>
+</body>
+</html>
